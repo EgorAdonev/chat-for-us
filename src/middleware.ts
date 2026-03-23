@@ -6,6 +6,10 @@ import { AuthService } from '@/lib/services/auth.service';
  * Middleware для защиты API маршрутов.
  * Проверяет наличие и валидность JWT токена.
  */
+// Принудительно используем Node.js runtime, так как AuthService импортирует nodemailer,
+// который не поддерживает Edge Runtime.
+export const runtime = 'nodejs';
+
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
