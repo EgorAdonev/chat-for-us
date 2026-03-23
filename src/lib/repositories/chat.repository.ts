@@ -1,11 +1,9 @@
 /**
- * Репозиторий для управления сообщениями чата.
+ * Production-ready Chat Repository using Prisma ORM.
  */
 import { Message } from '../types';
 import { logger } from '../utils/logger';
-
-// In-Memory хранилище сообщений
-const messagesDb: Message[] = [];
+import { prisma } from './user.repository';
 
 export class ChatRepository {
   static async addMessage(senderId: string, senderName: string, content: string): Promise<Message> {
@@ -13,30 +11,54 @@ export class ChatRepository {
       throw new Error("Message content cannot be empty");
     }
 
-    const message: Message = {
-      id: crypto.randomUUID(),
-      senderId,
-      senderName,
-      content,
-      timestamp: new Date(),
-    };
-
-    messagesDb.push(message);
-    logger.info(`Message added from ${senderName}`);
-    return message;
+    try {
+      const message = await prisma.message.create({
+        data: {
+          senderId,
+          senderName,
+          content,
+        },
+      });
+      return message;
+    } catch (error) {
+      logger.error('Database error in addMessage', error);
+      throw new Error('Failed to save message');
+    }
   }
 
   static async getMessages(limit = 50): Promise<Message[]> {
-    // Возвращаем последние сообщения
-    return messagesDb.slice(-limit);
+    try {
+      const messages = await prisma.message.findMany({
+        orderBy: { timestamp: 'asc' },
+        take: limit,
+      });
+      return messages;
+    } catch (error) {
+      logger.error('Database error in getMessages', error);
+      throw new Error('Failed to fetch messages');
+    }
   }
 
   static async searchUsers(query: string, currentUserId: string): Promise<{id: string, name: string}[]> {
-    // Заглушка поиска. В реальности обращались бы к UserRepository
-    return [
-      { id: '1', name: 'Алексей Иванов' },
-      { id: '2', name: 'Мария Петрова' },
-      { id: '3', name: 'Дмитрий Сидоров' },
-    ].filter(u => u.name.toLowerCase().includes(query.toLowerCase()) && u.id !== currentUserId);
+    try {
+      const users = await prisma.user.findMany({
+        where: {
+          name: {
+            contains: query,
+            mode: 'insensitive',
+          },
+          id: { not: currentUserId },
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+        take: 10,
+      });
+      return users;
+    } catch (error) {
+      logger.error('Database error in searchUsers', error);
+      return [];
+    }
   }
 }
