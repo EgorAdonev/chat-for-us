@@ -10,13 +10,18 @@ import type { NextRequest } from 'next/server';
  * Поэтому реализуем верификацию токена напрямую, используя Web Crypto API.
  */
 
-// Вспомогательная функция для декодирования Base64Url
+// Вспомогательная функция для декодирования Base64Url с восстановлением padding
 function base64UrlDecode(str: string): string {
-  str = str.replace(/-/g, '+').replace(/_/g, '/');
-  while (str.length % 4) {
-    str += '=';
+  // Заменяем символы Base64Url на стандартные Base64
+  let replaced = str.replace(/-/g, '+').replace(/_/g, '/');
+  
+  // Добавляем padding, если его нет
+  while (replaced.length % 4) {
+    replaced += '=';
   }
-  return Buffer.from(str, 'base64').toString('utf-8');
+  
+  // Декодируем из Base64
+  return Buffer.from(replaced, 'base64').toString('utf-8');
 }
 
 // Валидация токена через Web Crypto API (доступно в Edge Runtime)
@@ -45,17 +50,36 @@ async function verifyToken(token: string): Promise<{ userId: string; email: stri
     );
 
     // Проверяем подпись
+    // Подготавливаем сигнатуру из токена (String -> Base64 -> Uint8Array)
+    const tokenSignatureBase64 = signature.replace(/-/g, '+').replace(/_/g, '/');
+    while (tokenSignatureBase64.length % 4) {
+      // Pad signature string
+      // Note: We need a temp variable to avoid modifying original string if reused, though here it's fine.
+      // However, string concat in loop is slow, let's do calculation or just modify a copy.
+    }
+    
+    // Правильная конвертация base64url строки в Uint8Array для Web Crypto
+    const base64UrlStringToUint8Array = (base64UrlString: string) => {
+      let padding = '='.repeat((4 - base64UrlString.length % 4) % 4);
+      let base64String = (base64UrlString + padding)
+        .replace(/\-/g, '+')
+        .replace(/_/g, '/');
+      let rawData = atob(base64String);
+      let outputArray = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+      }
+      return outputArray;
+    };
+
+    const signatureBuffer = base64UrlStringToUint8Array(signature);
+    const dataBuffer = encoder.encode(signatureData);
+
     const isValid = await crypto.subtle.verify(
       'HMAC',
       key,
-      Buffer.from(signature, 'base64url'), // Node/Bun может требовать base64, но в Edge Buffer understands standard base64. 
-      // Если Buffer.from не работает как нужно с base64url, используем конвертацию:
-      // Но стандарт crypto.subtle.verify принимает ArrayBuffer.
-      // Подготовка сигнатуры:
-      // Signature в JWT это Base64Url. Node Buffer.from понимает base64, не base64url.
-      // Нужно сконвертировать.
-      Uint8Array.from(Buffer.from(signature.replace(/-/g, '+').replace(/_/g, '/'), 'base64')),
-      encoder.encode(signatureData)
+      signatureBuffer,
+      dataBuffer
     );
 
     if (!isValid) return null;
@@ -66,6 +90,7 @@ async function verifyToken(token: string): Promise<{ userId: string; email: stri
 
     return payload;
   } catch (e) {
+    console.error('Middleware token verification error', e);
     return null;
   }
 }
