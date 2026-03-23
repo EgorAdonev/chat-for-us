@@ -1,70 +1,98 @@
 /**
- * Сервис аутентификации.
- * Содержит бизнес-логику: генерация кодов, валидация, управление сессиями.
+ * Auth Service с использованием JWT и Zod.
  */
 import { UserRepository } from '../repositories/user.repository';
-import { User, AuthSession } from '../types';
+import { EmailService } from './email.service';
+import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
+import { LoginSchema, VerifyCodeSchema } from '../utils/validation';
 import { logger } from '../utils/logger';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
 
 export class AuthService {
   /**
-   * Иницирует процесс входа: генерирует код и "отправляет" его.
+   * Инициирует вход: валидирует данные и отправляет реальный Email.
    */
-  static async initiateLogin(email: string): Promise<void> {
-    // Валидация email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      throw new Error('Некорректный формат email');
+  static async initiateLogin(rawEmail: string): Promise<void> {
+    // 1. Валидация (Zod)
+    const validation = LoginSchema.safeParse({ email: rawEmail });
+    if (!validation.success) {
+      throw new Error(validation.error.errors[0].message);
+    }
+    
+    const { email } = validation.data;
+
+    // 2. Проверка/Создание пользователя
+    const user = await UserRepository.findByEmail(email);
+    if (!user) {
+      // Создаем черновик пользователя (можно добавить флаг isVerified)
+      // Для упрощения логики репозитория - просто проверяем
     }
 
-    // Проверка существования пользователя (опционально, можно скрывать)
-    const existingUser = await UserRepository.findByEmail(email);
-    
-    // Генерация 6-значного кода
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    
-    await UserRepository.saveOtp(email, code);
-    
-    // Имитация отправки email
-    logger.info(`[EMAIL SERVICE] Sending code ${code} to ${email}`);
-    // В реальном проде здесь вызов SMTP провайдера
+    // 3. Генерация криптостойкого OTP
+    const code = crypto.randomInt(100000, 999999).toString();
+
+    // 4. Сохранение OTP в хранилище (с временем жизни 5 мин)
+    await UserRepository.saveOtp(email, code, 5 * 60); 
+
+    // 5. Отправка Email (Nodemailer)
+    await EmailService.sendOtpEmail(email, code);
   }
 
   /**
-   * Проверяет код и выдает токен (регистрирует если нового пользователя).
+   * Верифицирует код и выпускает JWT токен.
    */
-  static async verifyCode(email: string, code: string, name?: string): Promise<AuthSession> {
-    const isValid = await UserRepository.verifyOtp(email, code);
+  static async verifyCode(rawData: { email: string; code: string; name?: string }) {
+    // 1. Валидация
+    const validation = VerifyCodeSchema.safeParse(rawData);
+    if (!validation.success) {
+      throw new Error(validation.error.errors[0].message);
+    }
     
+    const { email, code, name } = validation.data;
+
+    // 2. Проверка OTP
+    const isValid = await UserRepository.verifyOtp(email, code);
     if (!isValid) {
-      logger.warn(`Failed login attempt for ${email}`);
       throw new Error('Неверный код или срок действия истек');
     }
 
+    // 3. Получение или создание пользователя
     let user = await UserRepository.findByEmail(email);
-
-    // Регистрация нового пользователя, если имя предоставлено и пользователь не найден
+    
     if (!user) {
-      if (!name || name.trim().length === 0) {
-        throw new Error('Имя обязательно для регистрации');
+      if (!name) {
+        throw new Error('Для завершения регистрации необходимо указать имя');
       }
       user = await UserRepository.create(email, name);
     } else if (name && user.name !== name) {
-       // Опционально: разрешать смену имени
-       user.name = name; 
+      // Обновляем имя если передано
+      user.name = name; 
+      // В реальной БД тут был бы update
     }
 
+    // 4. Удаление использованного OTP
     await UserRepository.removeOtp(email);
 
-    // Генерация JWT-подобного токена (упрощенно для demo)
-    const token = Buffer.from(JSON.stringify({ userId: user.id, email: user.email })).toString('base64');
+    // 5. Генерация JWT (Access Token)
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
 
-    const session: AuthSession = {
-      token,
-      user,
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 часа
-    };
+    return { token, user };
+  }
 
-    return session;
+  /**
+   * Верифицирует JWT токен.
+   */
+  static verifyToken(token: string) {
+    try {
+      return jwt.verify(token, JWT_SECRET) as { userId: string; email: string };
+    } catch (e) {
+      return null;
+    }
   }
 }

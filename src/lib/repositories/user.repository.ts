@@ -1,24 +1,18 @@
 /**
- * Репозиторий для управления пользователями.
- * Слой абстракции над хранилищем данных.
+ * Обновленный репозиторий для работы с OTP и JWT данными.
+ * В реальном проекте здесь используется Prisma Client.
  */
 import { User } from '../types';
 import { logger } from '../utils/logger';
 
-// In-Memory хранилище (замена БД)
+// In-Memory storage (для запуска без БД)
 const usersDb = new Map<string, User>();
-const emailCodesDb = new Map<string, string>(); // email -> code
-const passwordHashes = new Map<string, string>(); // email -> hash (имитация)
+const otpDb = new Map<string, { code: string; expiresAt: number }>();
 
 export class UserRepository {
   static async findByEmail(email: string): Promise<User | null> {
-    // Имитация задержки сети
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
     for (const user of usersDb.values()) {
-      if (user.email === email) {
-        return user;
-      }
+      if (user.email === email) return user;
     }
     return null;
   }
@@ -31,24 +25,31 @@ export class UserRepository {
       role: 'USER',
       createdAt: new Date(),
     };
-    
     usersDb.set(newUser.id, newUser);
-    logger.info(`User created: ${newUser.id}`);
+    logger.info(`User created: ${email}`);
     return newUser;
   }
 
-  static async saveOtp(email: string, code: string): Promise<void> {
-    // Код истекает через 5 минут (логика должна быть в middleware, но здесь упростим)
-    emailCodesDb.set(email, code);
-    logger.info(`OTP saved for ${email}`);
+  static async saveOtp(email: string, code: string, ttlSeconds: number): Promise<void> {
+    const expiresAt = Date.now() + ttlSeconds * 1000;
+    otpDb.set(email, { code, expiresAt });
+    logger.info(`OTP generated for ${email}, expires at ${new Date(expiresAt).toISOString()}`);
   }
 
   static async verifyOtp(email: string, code: string): Promise<boolean> {
-    const storedCode = emailCodesDb.get(email);
-    return storedCode === code;
+    const record = otpDb.get(email);
+    if (!record) return false;
+    
+    // Проверка времени жизни
+    if (Date.now() > record.expiresAt) {
+      otpDb.delete(email);
+      return false;
+    }
+
+    return record.code === code;
   }
 
   static async removeOtp(email: string): Promise<void> {
-    emailCodesDb.delete(email);
+    otpDb.delete(email);
   }
 }
