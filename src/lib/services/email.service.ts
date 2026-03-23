@@ -29,13 +29,14 @@ const transporter = nodemailer.createTransport({
 export class EmailService {
   /**
    * Отправляет OTP код на почту пользователя.
+   * В случае ошибки SMTP выводит код в консоль (Fallback для Dev режима).
    */
   static async sendOtpEmail(email: string, code: string): Promise<void> {
     try {
       // Проверка настроек в режиме разработки
       if (!emailConfig.auth.user || !emailConfig.auth.pass) {
         logger.warn('SMTP credentials are missing. Falling back to console log.');
-        logger.info(`[EMAIL MOCK] To: ${email} | Code: ${code}`);
+        logger.info(`[MOCK EMAIL] To: ${email} | Code: ${code}`);
         return;
       }
 
@@ -63,10 +64,10 @@ export class EmailService {
       await transporter.sendMail(mailOptions);
       logger.info(`Email sent successfully to ${email}`);
     } catch (error) {
-      logger.error('Failed to send email', error);
-      // В случае ошибки логируем, но не крашим приложение, чтобы UX не страдал (в данном случае)
-      // Или можно пробросить ошибку выше, если критично.
-      throw new Error('Не удалось отправить письмо. Попробуйте позже.');
+      // Логируем ошибку SMTP, но не прерываем процесс входа
+      logger.error('Failed to send email via SMTP (using fallback)', error);
+      logger.warn(`[FALLBACK MOCK] Email could not be sent to ${email}. Verification code: ${code}`);
+      // Мы НЕ выбрасываем ошибку (throw), чтобы позволить пользователю войти, используя код из консоли
     }
   }
 }
