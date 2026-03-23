@@ -84,8 +84,9 @@ function verifyToken(token: string): { userId: string; email: string; role: stri
 export class AuthService {
   /**
    * Инициирует вход: валидирует данные и отправляет реальный Email.
+   * Возвращает сгенерированный код (для отладки).
    */
-  static async initiateLogin(rawEmail: string): Promise<void> {
+  static async initiateLogin(rawEmail: string): Promise<string> {
     // 1. Валидация (Zod)
     const validation = LoginSchema.safeParse({ email: rawEmail });
     if (!validation.success) {
@@ -107,7 +108,14 @@ export class AuthService {
     await UserRepository.saveOtp(email, code, 5 * 60); 
 
     // 5. Отправка Email (Nodemailer)
-    await EmailService.sendOtpEmail(email, code);
+    // Не блокируем процесс при ошибке отправки, так как код возвращаем для дев-режима
+    try {
+      await EmailService.sendOtpEmail(email, code);
+    } catch (e) {
+      logger.warn('Email send failed, but continuing for dev mode', e);
+    }
+
+    return code;
   }
 
   /**

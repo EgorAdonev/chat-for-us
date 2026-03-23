@@ -45,11 +45,13 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    await AuthService.initiateLogin(body.email);
+    const code = await AuthService.initiateLogin(body.email);
 
     return NextResponse.json({
       success: true,
       message: 'Код подтверждения отправлен на вашу почту',
+      // Возвращаем код только в режиме разработки для удобства тестирования
+      ...(process.env.NODE_ENV !== 'production' && { devCode: code }),
     });
 
   } catch (error: any) {
