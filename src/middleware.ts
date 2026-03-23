@@ -49,15 +49,6 @@ async function verifyToken(token: string): Promise<{ userId: string; email: stri
       ['verify']
     );
 
-    // Проверяем подпись
-    // Подготавливаем сигнатуру из токена (String -> Base64 -> Uint8Array)
-    const tokenSignatureBase64 = signature.replace(/-/g, '+').replace(/_/g, '/');
-    while (tokenSignatureBase64.length % 4) {
-      // Pad signature string
-      // Note: We need a temp variable to avoid modifying original string if reused, though here it's fine.
-      // However, string concat in loop is slow, let's do calculation or just modify a copy.
-    }
-    
     // Правильная конвертация base64url строки в Uint8Array для Web Crypto
     const base64UrlStringToUint8Array = (base64UrlString: string) => {
       let padding = '='.repeat((4 - base64UrlString.length % 4) % 4);
