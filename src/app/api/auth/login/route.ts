@@ -3,6 +3,8 @@ import { AuthService } from '@/lib/services/auth.service';
 import { GeoService } from '@/lib/services/geo.service';
 import { logger } from '@/lib/utils/logger';
 
+export const dynamic = 'force-dynamic';
+
 // Простая реализация in-memory Rate Limiter для избежания внешних зависимостей
 const rateLimitStore = new Map<string, number[]>();
 const RATE_LIMIT_MAX_REQUESTS = 5;

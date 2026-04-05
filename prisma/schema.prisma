@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  role      UserRole @default(USER)
+  createdAt DateTime @default(now())
+
+  messages Message[]
+}
+
+model Otp {
+  email     String   @id
+  code      String
+  expiresAt DateTime
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  senderId   String
+  senderName String
+  content    String
+  timestamp  DateTime @default(now())
+
+  sender User @relation(fields: [senderId], references: [id])
+}

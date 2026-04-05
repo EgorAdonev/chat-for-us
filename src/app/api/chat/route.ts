@@ -3,6 +3,8 @@ import { ChatRepository } from '@/lib/repositories/chat.repository';
 import { SendMessageSchema } from '@/lib/utils/validation';
 import { logger } from '@/lib/utils/logger';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
     // Middleware проверил токен и добавил заголовки

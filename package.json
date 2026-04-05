@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "postinstall": "prisma generate",
     "start": "next start",
     "format": "npm exec prettier --write . --ignore-unknown",
     "build": "next build",
@@ -19,6 +20,7 @@
     "@formkit/auto-animate": "^0.8.2",
     "@hello-pangea/dnd": "^18.0.1",
     "@hookform/resolvers": "^3.10.0",
+    "@prisma/client": "6.19.3",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",
     "@radix-ui/react-aspect-ratio": "^1.1.7",
@@ -65,6 +67,7 @@
     "next": "15.5.14",
     "next-themes": "^0.4.6",
     "nodemailer": "8.0.3",
+    "prisma": "6.19.3",
     "react": "^19.1.0",
     "react-colorful": "^5.6.1",
     "react-day-picker": "^9.14.0",
